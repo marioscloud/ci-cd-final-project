@@ -1,58 +1,8 @@
 apiVersion: tekton.dev/v1beta1
-kind: Pipeline
-metadata:
-  name: example-pipeline
-spec:
-  params:
-    - name: build-image
-      description: The image to be built
-      type: string
-    - name: app-name
-      description: The name of the application to deploy
-      type: string
-  workspaces:
-    - name: source
-  tasks:
-    - name: nose
-      taskRef:
-        name: nose
-      workspaces:
-        - name: source
-          workspace: source
-      params:
-        - name: args
-          value: "-v"
-        - name: build-image
-          value: $(params.build-image)
-  finally:
-    - name: cleanup
-      taskRef:
-        name: cleanup
-      workspaces:
-        - name: source
-          workspace: source
-      params:
-        - name: build-image
-          value: $(params.build-image)
-    - name: deploy
-      taskRef:
-        name: deploy
-      params:
-        - name: app-name
-          value: $(params.app-name)
-        - name: build-image
-          value: $(params.build-image)
----
-
-apiVersion: tekton.dev/v1beta1
 kind: Task
 metadata:
   name: cleanup
 spec:
-  params:
-    - name: build-image
-      description: The image to be built
-      type: string
   workspaces:
     - name: source
   steps:
@@ -82,7 +32,6 @@ spec:
           rm -rf "${WORKSPACE_SOURCE_PATH}"/..?*
         fi
 ---
-
 apiVersion: tekton.dev/v1beta1
 kind: Task
 metadata:
@@ -95,9 +44,6 @@ spec:
       description: Arguments to pass to nose
       type: string
       default: "-v"
-    - name: build-image
-      description: The image to be built
-      type: string
   steps:
     - name: nosetests
       image: python:3.9-slim
@@ -108,24 +54,3 @@ spec:
         python -m pip install --upgrade pip wheel
         pip install -r requirements.txt
         nosetests $(params.args)
----
-
-apiVersion: tekton.dev/v1beta1
-kind: Task
-metadata:
-  name: deploy
-spec:
-  params:
-    - name: app-name
-      description: The name of the application to deploy
-      type: string
-    - name: build-image
-      description: The image to be built
-      type: string
-  steps:
-    - name: deploy
-      image: quay.io/openshift/origin-cli:latest
-      script: |
-        #!/bin/bash
-        set -e
-        oc create deployment $(params.app-name) --image=$(params.build-image) --dry-run=client -o yaml | oc apply -f -
